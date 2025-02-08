@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  db:
+    image: mariadb:latest
+    container_name: mariadb-nl2sql-v2
+    environment:
+      MYSQL_DATABASE: midb
+      MYSQL_ROOT_PASSWORD: 120586
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - nlsql-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ollama:
+    image: ollama/ollama
+    container_name: ollama-service
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    networks:
+      - nlsql-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ollama-model-loader:
+    image: ollama/ollama
+    depends_on:
+      ollama:
+        condition: service_healthy
+    command: ollama pull mistral
+    networks:
+      - nlsql-network
+
+  app:
+    build: .
+    container_name: nlsql-app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - ollama
+    environment:
+      - DB_USER=root
+      - DB_PASSWORD=120586
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_NAME=midb
+      - OLLAMA_HOST=http://ollama:11434
+    volumes:
+      - ./app:/app
+    networks:
+      - nlsql-network
+    restart: always
+
+networks:
+  nlsql-network:
+    driver: bridge
+
+volumes:
+  mariadb_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ./data/mariadb
+      o: bind
+
+  ollama_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ./data/ollama
+      o: bind
