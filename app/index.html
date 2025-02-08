@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consultas SQL con IA</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Highlight.js para formateo SQL -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/default.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/sql.min.js"></script>
+</head>
+<body class="bg-gray-100 p-6">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-bold mb-6 text-center text-gray-800">
+            Consultas SQL usando IA
+        </h1>
+
+        <!-- Formulario de consulta -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <textarea 
+                id="pregunta"
+                class="w-full p-4 border rounded-lg mb-4 h-32"
+                placeholder="Escribe tu pregunta aquí... (ejemplo: 'muestra todos los usuarios activos')"
+            ></textarea>
+            <button 
+                onclick="enviarPregunta()"
+                class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition"
+            >
+                Consultar
+            </button>
+        </div>
+
+        <!-- Resultado SQL -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6 hidden" id="sqlContainer">
+            <h2 class="text-xl font-semibold mb-3">SQL Generado:</h2>
+            <pre><code class="language-sql" id="sqlResult"></code></pre>
+        </div>
+
+        <!-- Resultados de la consulta -->
+        <div class="bg-white rounded-lg shadow-md p-6 hidden" id="resultContainer">
+            <h2 class="text-xl font-semibold mb-3">Resultados:</h2>
+            <table class="min-w-full divide-y divide-gray-200" id="resultTable"></table>
+        </div>
+    </div>
+
+    <script>
+        async function enviarPregunta() {
+            const pregunta = document.getElementById('pregunta').value;
+            const button = document.querySelector('button[onclick="enviarPregunta()"]');
+            button.disabled = true;
+            button.innerText = 'Consultando...';
+            console.log('Consulta enviada');
+
+            const response = await fetch('http://localhost:8000/consulta_ia/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    pregunta: pregunta 
+                })
+            });
+
+            button.disabled = false;
+            button.innerText = 'Consultar';
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    mostrarResultados(data.resultado);
+                }
+            } else {
+                alert('Error en la consulta');
+            }
+        }
+
+        function mostrarResultados(resultados) {
+            const container = document.getElementById('resultContainer');
+            const table = document.getElementById('resultTable');
+            container.classList.remove('hidden');
+
+            // Limpiar tabla anterior
+            table.innerHTML = '';
+
+            // Crear encabezados basados en las keys del primer resultado
+            const headers = Object.keys(resultados[0]);
+            const thead = document.createElement('thead');
+            thead.innerHTML = `
+                <tr class="bg-gray-100">
+                    ${headers.map(h => `<th class="px-4 py-2 text-left">${h}</th>`).join('')}
+                </tr>
+            `;
+            table.appendChild(thead);
+
+            // Crear filas de datos
+            const tbody = document.createElement('tbody');
+            resultados.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = headers.map(h => `
+                    <td class="border-t px-4 py-2">${row[h]}</td>
+                `).join('');
+                tbody.appendChild(tr);
+            });
+            table.appendChild(tbody);
+        }
+    </script>
+</body>
+</html>
