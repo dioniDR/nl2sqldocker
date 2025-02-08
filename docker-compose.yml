@@ -32,19 +32,11 @@ services:
       - nlsql-network
     restart: always
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434"]
-      interval: 10s
-      timeout: 5s
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
       retries: 5
-
-  ollama-model-loader:
-    image: ollama/ollama
-    depends_on:
-      ollama:
-        condition: service_healthy
-    command: ollama pull mistral
-    networks:
-      - nlsql-network
+      start_period: 40s
 
   app:
     build: .
@@ -78,10 +70,4 @@ volumes:
       type: none
       device: ./data/mariadb
       o: bind
-
   ollama_data:
-    driver: local
-    driver_opts:
-      type: none
-      device: ./data/ollama
-      o: bind
