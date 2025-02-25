@@ -1,11 +1,13 @@
 from fastapi import FastAPI, Depends
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import text  # Añadir esta importación
+from sqlalchemy import text
 from database_ia import SessionLocalIA
 from sql_generator import generar_sql_desde_texto
+from chat_generator import generar_respuesta_chat_con_cache
 from pydantic import BaseModel
+import ollama
 
 app = FastAPI(title="API SQL IA")
 
@@ -16,6 +18,11 @@ app.mount("/static", StaticFiles(directory="."), name="static")
 @app.get("/")
 async def read_index():
     return FileResponse('index.html')
+
+# Añadir ruta para consultas_chat.html
+@app.get("/consultas_chat")
+async def read_consultas_chat():
+    return FileResponse('consultas_chat.html')
 
 def get_db():
     db = SessionLocalIA()
@@ -53,3 +60,36 @@ def consulta_ia(pregunta: Pregunta, db: Session = Depends(get_db)):
         }
     except Exception as e:
         return {"error": f"Error en la consulta: {str(e)}"}
+
+@app.post("/consulta_chat/")
+def consulta_chat(pregunta: Pregunta):
+    """
+    Recibe una pregunta en lenguaje natural y devuelve la respuesta de Mistral.
+    """
+    return generar_respuesta_chat_con_cache(pregunta.pregunta)
+
+@app.post("/consulta_chat_stream/")
+async def consulta_chat_stream(pregunta: Pregunta):
+    """
+    Versión streaming de la consulta de chat.
+    """
+    async def generate():
+        try:
+            stream = ollama.chat(
+                model="mistral",
+                messages=[{"role": "user", "content": pregunta.pregunta}],
+                stream=True,
+                options={
+                    "temperature": 0.7,
+                    "num_thread": 4
+                }
+            )
+            
+            for chunk in stream:
+                if 'message' in chunk and 'content' in chunk['message']:
+                    yield chunk['message']['content']
+                    
+        except Exception as e:
+            yield f"Error: {str(e)}"
+    
+    return StreamingResponse(generate(), media_type="text/plain")

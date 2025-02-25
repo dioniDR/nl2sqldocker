@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consultas Chat con IA</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Incluir Interact.js para el arrastre en lugar de Draggable -->
+    <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+    <style>
+        .nota {
+            cursor: move;
+            position: absolute;
+            min-width: 200px;
+            max-width: 300px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+            touch-action: none; /* Importante para dispositivos táctiles */
+            user-select: none;
+        }
+        .nota-header {
+            cursor: move;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-6 min-h-screen">
+    <div class="max-w-6xl mx-auto">
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-3xl font-bold text-gray-800">Consultas Chat con IA</h1>
+            <a href="/" class="text-blue-500 hover:text-blue-700">Volver a NL2SQL</a>
+        </div>
+        
+        <!-- Contenedor de notas -->
+        <div id="tablero" class="relative bg-white rounded-lg shadow-md p-6 min-h-[600px] border-2 border-gray-200">
+            <button 
+                id="botonNuevaConsulta"
+                class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition fixed bottom-4 right-4 shadow-lg"
+            >
+                Nueva Consulta
+            </button>
+        </div>
+    </div>
+
+    <!-- Ventana modal para nueva consulta -->
+    <div id="modalConsulta" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-lg p-6 max-w-md w-full">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-semibold">Nueva Consulta</h3>
+                <button id="cerrarModal" class="text-gray-500 hover:text-gray-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <textarea 
+                id="textareaConsulta"
+                class="w-full p-4 border rounded-lg mb-4 h-32"
+                placeholder="Escribe tu pregunta aquí..."
+            ></textarea>
+            <div class="flex justify-end">
+                <button 
+                    id="botonEnviar"
+                    class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition"
+                >
+                    Enviar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Variables para posicionar notas nuevas y llevar el z-index máximo
+        let posX = 20;
+        let posY = 20;
+        let maxZIndex = 10;
+        
+        // Configurar interact.js para hacer las notas arrastrables
+        function setupDraggable() {
+            interact('.nota').draggable({
+                inertia: true,
+                modifiers: [
+                    interact.modifiers.restrictRect({
+                        restriction: 'parent',
+                        endOnly: true
+                    })
+                ],
+                autoScroll: true,
+                listeners: {
+                    start: function(event) {
+                        // Al empezar a arrastrar, traer al frente
+                        const target = event.target;
+                        bringToFront(target);
+                    },
+                    move: dragMoveListener,
+                }
+            });
+        }
+        
+        function dragMoveListener(event) {
+            const target = event.target;
+            
+            // Obtener posición actual
+            const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
+            const y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
+            
+            // Actualizar posición
+            target.style.transform = `translate(${x}px, ${y}px)`;
+            
+            // Almacenar posición como atributos
+            target.setAttribute('data-x', x);
+            target.setAttribute('data-y', y);
+        }
+        
+        // Función para traer una nota al frente
+        function bringToFront(element) {
+            maxZIndex += 1;
+            element.style.zIndex = maxZIndex;
+        }
+        
+        // Inicializar al cargar la página
+        document.addEventListener('DOMContentLoaded', function() {
+            setupDraggable();
+        });
+
+        // Manejar apertura/cierre de modal
+        document.getElementById('botonNuevaConsulta').addEventListener('click', function() {
+            document.getElementById('modalConsulta').classList.remove('hidden');
+            document.getElementById('textareaConsulta').focus();
+        });
+
+        document.getElementById('cerrarModal').addEventListener('click', function() {
+            document.getElementById('modalConsulta').classList.add('hidden');
+        });
+
+        // Permitir enviar con Enter
+        document.getElementById('textareaConsulta').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                enviarConsultaChatStream();
+            }
+        });
+        
+        async function enviarConsultaChatStream() {
+            const pregunta = document.getElementById('textareaConsulta').value.trim();
+            
+            if (!pregunta) return;
+            
+            const button = document.getElementById('botonEnviar');
+            button.disabled = true;
+            button.innerText = 'Enviando...';
+
+            try {
+                // Crear un contenedor para la nota antes de empezar el streaming
+                const id = 'nota_' + Date.now();
+                const nota = document.createElement('div');
+                nota.id = id;
+                nota.className = 'nota bg-yellow-100 rounded-lg overflow-hidden';
+                nota.style.left = `${posX}px`;
+                nota.style.top = `${posY}px`;
+                nota.style.zIndex = maxZIndex;
+                
+                nota.innerHTML = `
+                    <div class="nota-header bg-yellow-200 p-2 flex justify-between items-center">
+                        <span class="font-semibold">Consulta</span>
+                        <button class="eliminar-nota text-red-500 hover:text-red-700">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="p-3">
+                        <div class="text-sm font-medium mb-2">${pregunta}</div>
+                        <div class="border-t border-yellow-200 my-2"></div>
+                        <div id="response-${id}" class="text-sm whitespace-pre-wrap">Generando respuesta...</div>
+                    </div>
+                `;
+                
+                document.getElementById('tablero').appendChild(nota);
+                
+                // Configurar click para traer al frente
+                nota.addEventListener('mousedown', function() {
+                    bringToFront(nota);
+                });
+                
+                // Configurar eliminación
+                nota.querySelector('.eliminar-nota').addEventListener('click', function() {
+                    document.getElementById(id).remove();
+                });
+                
+                // Actualizar posición para la próxima nota
+                posX += 30;
+                posY += 30;
+                if (posX > 300) {
+                    posX = 20;
+                    posY = 20;
+                }
+                
+                // Incrementar el z-index máximo
+                maxZIndex++;
+                
+                // Hacer la nota arrastrable
+                setupDraggable();
+                
+                // Iniciar streaming
+                const response = await fetch('http://localhost:8000/consulta_chat_stream/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        pregunta: pregunta 
+                    })
+                });
+
+                const responseElem = document.getElementById(`response-${id}`);
+                responseElem.textContent = ""; // Limpiar mensaje de "Generando..."
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                while (true) {
+                    const {value, done} = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value);
+                    responseElem.textContent += chunk;
+                    // Auto-scroll al fondo de la nota
+                    responseElem.scrollTop = responseElem.scrollHeight;
+                }
+                
+                document.getElementById('textareaConsulta').value = '';
+                document.getElementById('modalConsulta').classList.add('hidden');
+                
+            } catch (error) {
+                alert('Error de conexión: ' + error.message);
+            } finally {
+                button.disabled = false;
+                button.innerText = 'Enviar';
+            }
+        }
+
+        function crearNotaAdhesiva(pregunta, respuesta) {
+            // Crear identificador único para esta nota
+            const id = 'nota_' + Date.now();
+            
+            // Crear el elemento de nota
+            const nota = document.createElement('div');
+            nota.id = id;
+            nota.className = 'nota bg-yellow-100 rounded-lg overflow-hidden';
+            nota.style.left = `${posX}px`;
+            nota.style.top = `${posY}px`;
+            nota.style.zIndex = maxZIndex;
+            
+            // Crear el contenido de la nota
+            nota.innerHTML = `
+                <div class="nota-header bg-yellow-200 p-2 flex justify-between items-center">
+                    <span class="font-semibold">Consulta</span>
+                    <button class="eliminar-nota text-red-500 hover:text-red-700">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+                </div>
+                <div class="p-3">
+                    <div class="text-sm font-medium mb-2">${pregunta}</div>
+                    <div class="border-t border-yellow-200 my-2"></div>
+                    <div class="text-sm whitespace-pre-wrap">${respuesta}</div>
+                </div>
+            `;
+            
+            // Añadir la nota al tablero
+            document.getElementById('tablero').appendChild(nota);
+            
+            // Configurar click para traer al frente
+            nota.addEventListener('mousedown', function() {
+                bringToFront(nota);
+            });
+            
+            // Configurar el botón para eliminar la nota
+            nota.querySelector('.eliminar-nota').addEventListener('click', function() {
+                document.getElementById(id).remove();
+            });
+            
+            // Actualizar posición para la próxima nota (efecto cascada)
+            posX += 30;
+            posY += 30;
+            
+            // Si las notas se acumulan demasiado, reiniciar posiciones
+            if (posX > 300) {
+                posX = 20;
+                posY = 20;
+            }
+            
+            // Incrementar el z-index máximo
+            maxZIndex++;
+            
+            // Hacer la nota arrastrable
+            setupDraggable();
+        }
+        
+        // Usar la versión streaming por defecto
+        document.getElementById('botonEnviar').addEventListener('click', enviarConsultaChatStream);
+    </script>
+</body>
+</html>

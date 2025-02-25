@@ -13,7 +13,15 @@ def generar_sql_desde_texto(texto):
             messages=[{
                 "role": "user", 
                 "content": f"Genera SOLO una consulta SQL para MariaDB sin explicaciones adicionales. La consulta debe ser: {texto}"
-            }]
+            }],
+            options={
+                "num_predict": 50,      # SQL es típicamente más corto
+                "temperature": 0.2,     # Baja temperatura para SQL más determinístico
+                "top_k": 40,
+                "top_p": 0.9,
+                "num_gpu": 1,
+                "num_thread": 4
+            }
         )
 
         # Obtener la respuesta

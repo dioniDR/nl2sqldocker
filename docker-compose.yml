@@ -28,6 +28,17 @@ services:
       - ollama_data:/root/.ollama
     ports:
       - "11434:11434"
+    deploy:
+      resources:
+        limits:
+          cpus: '4'  # Asignar 4 CPUs (ajusta según tu sistema)
+          memory: 8G  # Asignar 8GB de RAM (ajusta según tu sistema)
+        reservations:
+          cpus: '2'
+          memory: 4G
+    environment:
+      - OLLAMA_NUM_THREADS=4  # Usar 4 hilos para inferencia
+      - OLLAMA_HOST=0.0.0.0
     networks:
       - nlsql-network
     restart: always
@@ -37,6 +48,19 @@ services:
       timeout: 10s
       retries: 5
       start_period: 40s
+
+  # Servicio opcional de precarga del modelo
+  init-ollama:
+    image: ollama/ollama
+    depends_on:
+      - ollama
+    command: >
+      sh -c "sleep 10 && 
+             ollama pull mistral && 
+             echo 'Modelo Mistral precargado correctamente'"
+    networks:
+      - nlsql-network
+    restart: "no"
 
   app:
     build: .
@@ -71,3 +95,4 @@ volumes:
       device: ./data/mariadb
       o: bind
   ollama_data:
+    driver: local
