@@ -6,14 +6,16 @@
     <title>Consultas Chat con IA</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Incluir Interact.js para el arrastre en lugar de Draggable -->
+    <!-- Incluir Interact.js para el arrastre -->
     <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&family=Open+Sans&family=Montserrat&family=Lato&family=Source+Code+Pro&display=swap" rel="stylesheet">
     <style>
         .nota {
             cursor: move;
             position: absolute;
-            min-width: 200px;
-            max-width: 300px;
+            min-width: 250px;
+            max-width: 350px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             z-index: 10;
             touch-action: none; /* Importante para dispositivos táctiles */
@@ -21,6 +23,61 @@
         }
         .nota-header {
             cursor: move;
+        }
+        .nota-content {
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        .font-roboto { font-family: 'Roboto', sans-serif; }
+        .font-opensans { font-family: 'Open Sans', sans-serif; }
+        .font-montserrat { font-family: 'Montserrat', sans-serif; }
+        .font-lato { font-family: 'Lato', sans-serif; }
+        .font-sourcecode { font-family: 'Source Code Pro', monospace; }
+        
+        /* Estilos para la barra de scroll */
+        .nota-content::-webkit-scrollbar {
+            width: 8px;
+        }
+        .nota-content::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.05);
+            border-radius: 4px;
+        }
+        .nota-content::-webkit-scrollbar-thumb {
+            background: rgba(0,0,0,0.2);
+            border-radius: 4px;
+        }
+        .nota-content::-webkit-scrollbar-thumb:hover {
+            background: rgba(0,0,0,0.3);
+        }
+        
+        /* Colores de fondo para las notas */
+        .bg-yellow-light { background-color: #FFF9C4; }
+        .bg-blue-light { background-color: #BBDEFB; }
+        .bg-green-light { background-color: #C8E6C9; }
+        .bg-pink-light { background-color: #F8BBD0; }
+        .bg-purple-light { background-color: #E1BEE7; }
+        .bg-orange-light { background-color: #FFE0B2; }
+        .bg-teal-light { background-color: #B2DFDB; }
+        
+        /* Colores para los headers */
+        .bg-yellow-header { background-color: #FBC02D; }
+        .bg-blue-header { background-color: #42A5F5; }
+        .bg-green-header { background-color: #66BB6A; }
+        .bg-pink-header { background-color: #EC407A; }
+        .bg-purple-header { background-color: #AB47BC; }
+        .bg-orange-header { background-color: #FFA726; }
+        .bg-teal-header { background-color: #26A69A; }
+        
+        /* Panel de personalización */
+        .customization-panel {
+            position: absolute;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            padding: 12px;
+            z-index: 100;
+            width: 180px;
+            display: none;
         }
     </style>
 </head>
@@ -68,12 +125,52 @@
             </div>
         </div>
     </div>
+    
+    <!-- Panel de personalización de notas -->
+    <div id="customizePanel" class="customization-panel">
+        <h4 class="font-semibold mb-2">Personalizar Nota</h4>
+        
+        <div class="mb-2">
+            <label class="block text-sm mb-1">Color de fondo:</label>
+            <div class="flex flex-wrap gap-1">
+                <div class="w-5 h-5 bg-yellow-light cursor-pointer rounded" onclick="cambiarColor('yellow')"></div>
+                <div class="w-5 h-5 bg-blue-light cursor-pointer rounded" onclick="cambiarColor('blue')"></div>
+                <div class="w-5 h-5 bg-green-light cursor-pointer rounded" onclick="cambiarColor('green')"></div>
+                <div class="w-5 h-5 bg-pink-light cursor-pointer rounded" onclick="cambiarColor('pink')"></div>
+                <div class="w-5 h-5 bg-purple-light cursor-pointer rounded" onclick="cambiarColor('purple')"></div>
+                <div class="w-5 h-5 bg-orange-light cursor-pointer rounded" onclick="cambiarColor('orange')"></div>
+                <div class="w-5 h-5 bg-teal-light cursor-pointer rounded" onclick="cambiarColor('teal')"></div>
+            </div>
+        </div>
+        
+        <div class="mb-2">
+            <label class="block text-sm mb-1">Tipo de fuente:</label>
+            <select id="fontSelector" class="w-full text-sm p-1 border rounded">
+                <option value="font-roboto">Roboto</option>
+                <option value="font-opensans">Open Sans</option>
+                <option value="font-montserrat">Montserrat</option>
+                <option value="font-lato">Lato</option>
+                <option value="font-sourcecode">Source Code</option>
+            </select>
+        </div>
+        
+        <div class="mb-2">
+            <label class="block text-sm mb-1">Tamaño:</label>
+            <select id="fontSizeSelector" class="w-full text-sm p-1 border rounded">
+                <option value="text-xs">Pequeño</option>
+                <option value="text-sm" selected>Mediano</option>
+                <option value="text-base">Normal</option>
+                <option value="text-lg">Grande</option>
+            </select>
+        </div>
+    </div>
 
     <script>
         // Variables para posicionar notas nuevas y llevar el z-index máximo
         let posX = 20;
         let posY = 20;
         let maxZIndex = 10;
+        let currentNote = null;
         
         // Configurar interact.js para hacer las notas arrastrables
         function setupDraggable() {
@@ -118,9 +215,86 @@
             element.style.zIndex = maxZIndex;
         }
         
+        // Función para mostrar el panel de personalización
+        function mostrarPanelPersonalizacion(nota, event) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            const panel = document.getElementById('customizePanel');
+            const rect = nota.getBoundingClientRect();
+            
+            // Posicionar el panel cerca de la nota
+            panel.style.left = `${rect.right + 10}px`;
+            panel.style.top = `${rect.top}px`;
+            panel.style.display = 'block';
+            
+            currentNote = nota;
+            
+            // Cerrar el panel al hacer clic fuera de él
+            setTimeout(() => {
+                document.addEventListener('click', cerrarPanelPersonalizacion);
+            }, 100);
+        }
+        
+        function cerrarPanelPersonalizacion(event) {
+            const panel = document.getElementById('customizePanel');
+            if (!panel.contains(event.target)) {
+                panel.style.display = 'none';
+                document.removeEventListener('click', cerrarPanelPersonalizacion);
+            }
+        }
+        
+        // Función para cambiar el color de la nota
+        function cambiarColor(color) {
+            if (!currentNote) return;
+            
+            // Eliminar clases de color anteriores
+            currentNote.className = currentNote.className
+                .replace(/bg-\w+-light/g, '')
+                .trim();
+                
+            // Obtener el header
+            const header = currentNote.querySelector('.nota-header');
+            header.className = header.className
+                .replace(/bg-\w+-header/g, '')
+                .trim();
+            
+            // Añadir nuevas clases de color
+            currentNote.classList.add(`bg-${color}-light`);
+            header.classList.add(`bg-${color}-header`);
+        }
+        
         // Inicializar al cargar la página
         document.addEventListener('DOMContentLoaded', function() {
             setupDraggable();
+            
+            // Configurar selectores de fuente
+            document.getElementById('fontSelector').addEventListener('change', function() {
+                if (!currentNote) return;
+                
+                // Eliminar clases de fuente anteriores
+                const content = currentNote.querySelector('.nota-content');
+                content.className = content.className
+                    .replace(/font-\w+/g, '')
+                    .trim();
+                
+                // Añadir nueva clase de fuente
+                content.classList.add(this.value);
+            });
+            
+            // Configurar selector de tamaño
+            document.getElementById('fontSizeSelector').addEventListener('change', function() {
+                if (!currentNote) return;
+                
+                // Eliminar clases de tamaño anteriores
+                const content = currentNote.querySelector('.nota-content');
+                content.className = content.className
+                    .replace(/text-\w+/g, '')
+                    .trim();
+                
+                // Añadir nueva clase de tamaño
+                content.classList.add(this.value);
+            });
         });
 
         // Manejar apertura/cierre de modal
@@ -151,28 +325,38 @@
             button.innerText = 'Enviando...';
 
             try {
+                // Obtener la configuración actual
+                const config = window.getAIConfig ? window.getAIConfig() : {};
+                
                 // Crear un contenedor para la nota antes de empezar el streaming
                 const id = 'nota_' + Date.now();
                 const nota = document.createElement('div');
                 nota.id = id;
-                nota.className = 'nota bg-yellow-100 rounded-lg overflow-hidden';
+                nota.className = 'nota bg-yellow-light rounded-lg overflow-hidden';
                 nota.style.left = `${posX}px`;
                 nota.style.top = `${posY}px`;
                 nota.style.zIndex = maxZIndex;
                 
                 nota.innerHTML = `
-                    <div class="nota-header bg-yellow-200 p-2 flex justify-between items-center">
+                    <div class="nota-header bg-yellow-header p-2 flex justify-between items-center">
                         <span class="font-semibold">Consulta</span>
-                        <button class="eliminar-nota text-red-500 hover:text-red-700">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-                            </svg>
-                        </button>
+                        <div class="flex space-x-2">
+                            <button class="personalizar-nota text-blue-600 hover:text-blue-800">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                                </svg>
+                            </button>
+                            <button class="eliminar-nota text-red-500 hover:text-red-700">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                        </div>
                     </div>
                     <div class="p-3">
                         <div class="text-sm font-medium mb-2">${pregunta}</div>
-                        <div class="border-t border-yellow-200 my-2"></div>
-                        <div id="response-${id}" class="text-sm whitespace-pre-wrap">Generando respuesta...</div>
+                        <div class="border-t border-yellow-300 my-2"></div>
+                        <div id="response-${id}" class="nota-content text-sm font-roboto whitespace-pre-wrap">Generando respuesta...</div>
                     </div>
                 `;
                 
@@ -181,6 +365,11 @@
                 // Configurar click para traer al frente
                 nota.addEventListener('mousedown', function() {
                     bringToFront(nota);
+                });
+                
+                // Configurar el botón de personalización
+                nota.querySelector('.personalizar-nota').addEventListener('click', function(event) {
+                    mostrarPanelPersonalizacion(nota, event);
                 });
                 
                 // Configurar eliminación
@@ -203,13 +392,14 @@
                 setupDraggable();
                 
                 // Iniciar streaming
-                const response = await fetch('http://localhost:8000/consulta_chat_stream/', {
+                const response = await fetch('/consulta_chat_stream/', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({ 
-                        pregunta: pregunta 
+                        pregunta: pregunta,
+                        config: config
                     })
                 });
 
@@ -240,67 +430,11 @@
             }
         }
 
-        function crearNotaAdhesiva(pregunta, respuesta) {
-            // Crear identificador único para esta nota
-            const id = 'nota_' + Date.now();
-            
-            // Crear el elemento de nota
-            const nota = document.createElement('div');
-            nota.id = id;
-            nota.className = 'nota bg-yellow-100 rounded-lg overflow-hidden';
-            nota.style.left = `${posX}px`;
-            nota.style.top = `${posY}px`;
-            nota.style.zIndex = maxZIndex;
-            
-            // Crear el contenido de la nota
-            nota.innerHTML = `
-                <div class="nota-header bg-yellow-200 p-2 flex justify-between items-center">
-                    <span class="font-semibold">Consulta</span>
-                    <button class="eliminar-nota text-red-500 hover:text-red-700">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-                    </svg>
-                </button>
-                </div>
-                <div class="p-3">
-                    <div class="text-sm font-medium mb-2">${pregunta}</div>
-                    <div class="border-t border-yellow-200 my-2"></div>
-                    <div class="text-sm whitespace-pre-wrap">${respuesta}</div>
-                </div>
-            `;
-            
-            // Añadir la nota al tablero
-            document.getElementById('tablero').appendChild(nota);
-            
-            // Configurar click para traer al frente
-            nota.addEventListener('mousedown', function() {
-                bringToFront(nota);
-            });
-            
-            // Configurar el botón para eliminar la nota
-            nota.querySelector('.eliminar-nota').addEventListener('click', function() {
-                document.getElementById(id).remove();
-            });
-            
-            // Actualizar posición para la próxima nota (efecto cascada)
-            posX += 30;
-            posY += 30;
-            
-            // Si las notas se acumulan demasiado, reiniciar posiciones
-            if (posX > 300) {
-                posX = 20;
-                posY = 20;
-            }
-            
-            // Incrementar el z-index máximo
-            maxZIndex++;
-            
-            // Hacer la nota arrastrable
-            setupDraggable();
-        }
-        
         // Usar la versión streaming por defecto
         document.getElementById('botonEnviar').addEventListener('click', enviarConsultaChatStream);
     </script>
+    
+    <!-- Incluir el menú de configuración global -->
+    <script src="/static/js/config-menu.js"></script>
 </body>
 </html>

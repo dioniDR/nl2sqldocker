@@ -1,11 +1,23 @@
 import ollama
 import re
+from config_handler import config_handler
 
-def generar_sql_desde_texto(texto):
+def generar_sql_desde_texto(texto, config_params=None):
     """
     Toma una pregunta en lenguaje natural y genera una consulta SQL usando Ollama (Mistral).
+    
+    Args:
+        texto (str): La pregunta en lenguaje natural.
+        config_params (dict, optional): Parámetros de configuración personalizados.
     """
     print(f"Texto recibido: {texto}")
+    
+    # Obtener parámetros de configuración
+    params = config_handler.get_sql_params()
+    
+    # Actualizar con los parámetros personalizados
+    if config_params:
+        params.update(config_params)
     
     try:
         respuesta = ollama.chat(
@@ -15,12 +27,12 @@ def generar_sql_desde_texto(texto):
                 "content": f"Genera SOLO una consulta SQL para MariaDB sin explicaciones adicionales. La consulta debe ser: {texto}"
             }],
             options={
-                "num_predict": 50,      # SQL es típicamente más corto
-                "temperature": 0.2,     # Baja temperatura para SQL más determinístico
-                "top_k": 40,
-                "top_p": 0.9,
-                "num_gpu": 1,
-                "num_thread": 4
+                "num_predict": params.get('num_predict', 50),
+                "temperature": params.get('temperature', 0.2),
+                "top_k": params.get('top_k', 40),
+                "top_p": params.get('top_p', 0.9),
+                "num_gpu": params.get('num_gpu', 1),
+                "num_thread": params.get('num_thread', 4)
             }
         )
 

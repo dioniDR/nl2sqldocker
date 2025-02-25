@@ -1,15 +1,27 @@
 import ollama
 import hashlib
 from datetime import datetime, timedelta
+from config_handler import config_handler
 
 # Caché simple en memoria
 _cache = {}
 
-def generar_respuesta_chat(texto):
+def generar_respuesta_chat(texto, config_params=None):
     """
     Toma una pregunta en lenguaje natural y genera una respuesta usando Ollama (Mistral).
+    
+    Args:
+        texto (str): La pregunta en lenguaje natural.
+        config_params (dict, optional): Parámetros de configuración personalizados.
     """
     print(f"Texto recibido en chat: {texto}")
+    
+    # Obtener parámetros de configuración
+    params = config_handler.get_chat_params()
+    
+    # Actualizar con los parámetros personalizados
+    if config_params:
+        params.update(config_params)
     
     try:
         respuesta = ollama.chat(
@@ -19,12 +31,12 @@ def generar_respuesta_chat(texto):
                 "content": texto
             }],
             options={
-                "num_predict": 100,     # Limitar la longitud de respuesta
-                "temperature": 0.7,     # Reducir la temperatura para respuestas más determinísticas
-                "top_k": 40,            # Limitar espacio de búsqueda
-                "top_p": 0.9,           # Limitar espacio de búsqueda
-                "num_gpu": 1,           # Usar una GPU (si está disponible)
-                "num_thread": 4         # Usar múltiples hilos de CPU
+                "num_predict": params.get('num_predict', 100),
+                "temperature": params.get('temperature', 0.7),
+                "top_k": params.get('top_k', 40),
+                "top_p": params.get('top_p', 0.9),
+                "num_gpu": params.get('num_gpu', 1),
+                "num_thread": params.get('num_thread', 4)
             }
         )
 
@@ -41,10 +53,18 @@ def generar_respuesta_chat(texto):
         print(f"Error al generar respuesta: {str(e)}")
         return {"error": f"Error al generar respuesta: {str(e)}"}
 
-def generar_respuesta_chat_con_cache(texto):
+def generar_respuesta_chat_con_cache(texto, config_params=None):
     """
     Versión con caché de la función generar_respuesta_chat.
+    
+    Args:
+        texto (str): La pregunta en lenguaje natural.
+        config_params (dict, optional): Parámetros de configuración personalizados.
     """
+    # Si hay configuración personalizada, no usar caché
+    if config_params:
+        return generar_respuesta_chat(texto, config_params)
+    
     # Crear un hash de la consulta para usar como clave de caché
     texto_hash = hashlib.md5(texto.encode()).hexdigest()
     

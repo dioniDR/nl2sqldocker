@@ -14,12 +14,8 @@
 <body class="bg-gray-100 p-6">
     
     <div class="max-w-4xl mx-auto">
-        <h1 class="text-3xl font-bold mb-6 text-center text-gray-800">
-            Consultas SQL usando IA
-        </h1>
-                    <!-- Añade esto justo después de la etiqueta h1 en tu index.html -->
         <div class="flex justify-between items-center mb-6">
-            <h1 class="text-3xl font-bold mb-6 text-center text-gray-800">
+            <h1 class="text-3xl font-bold text-gray-800">
                 Consultas SQL usando IA
             </h1>
             <a href="/consultas_chat" class="text-blue-500 hover:text-blue-700">
@@ -55,6 +51,9 @@
         </div>
     </div>
 
+    <!-- Incluir el menú de configuración global -->
+    <script src="/static/js/config-menu.js"></script>
+    
     <script>
         async function enviarPregunta() {
             const pregunta = document.getElementById('pregunta').value;
@@ -63,13 +62,17 @@
             button.innerText = 'Consultando...';
             console.log('Consulta enviada');
 
-            const response = await fetch('http://localhost:8000/consulta_ia/', {
+            // Obtener la configuración actual
+            const config = window.getAIConfig ? window.getAIConfig() : {};
+
+            const response = await fetch('/consulta_ia/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({ 
-                    pregunta: pregunta 
+                    pregunta: pregunta,
+                    config: config
                 })
             });
 
@@ -82,6 +85,15 @@
                     alert(data.error);
                 } else {
                     mostrarResultados(data.resultado);
+                    
+                    // Mostrar el SQL generado
+                    const sqlContainer = document.getElementById('sqlContainer');
+                    const sqlResult = document.getElementById('sqlResult');
+                    sqlContainer.classList.remove('hidden');
+                    sqlResult.textContent = data.sql;
+                    
+                    // Aplicar highlight de SQL
+                    hljs.highlightElement(sqlResult);
                 }
             } else {
                 alert('Error en la consulta');
