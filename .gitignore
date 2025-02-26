@@ -1,2 +1,6 @@
 data/
 data/
+
+# Ignore environment variables file
+.env
+*/.env

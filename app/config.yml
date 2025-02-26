@@ -1,24 +1,28 @@
-# Configuración predeterminada para Ollama/Mistral
-# Este archivo contiene los parámetros que controlan la generación de texto con Ollama
-
-ollama:
-  modelo: "mistral"
-  host: "http://ollama:11434"
-
-# Parámetros para generación de SQL
-sql:
-  num_predict: 50       # SQL es típicamente más corto
-  temperature: 0.2      # Baja temperatura para SQL más determinístico
-  top_k: 40
-  top_p: 0.9
-  num_gpu: 1
-  num_thread: 4
-
-# Parámetros para generación de chat
+ai_provider: ollama
 chat:
-  num_predict: 100      # Limitar la longitud de respuesta
-  temperature: 0.7      # Temperatura moderada para respuestas conversacionales
-  top_k: 40
-  top_p: 0.9
+  configType: chat
+  model: claude-2.1
   num_gpu: 1
+  num_predict: 500
+  num_thread: 8
+  provider: claude
+  temperature: 1
+  top_k: 100
+  top_p: 1
+claude:
+  model: claude-2.1
+ollama:
+  host: http://ollama:11434
+  modelo: mistral
+openai:
+  model: gpt-4o
+sql:
+  configType: sql
+  model: claude-2.1
+  num_gpu: 1
+  num_predict: 500
   num_thread: 4
+  provider: claude
+  temperature: 1
+  top_k: 40
+  top_p: 1

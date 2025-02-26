@@ -7,6 +7,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Cargar la configuración actual
     loadConfig();
+    
+    // Cargar los proveedores disponibles
+    loadAvailableProviders();
 });
 
 // Crear el menú de configuración
@@ -28,6 +31,17 @@ function createConfigMenu() {
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                 </button>
+            </div>
+            
+            <!-- Selector de proveedor de IA -->
+            <div class="mb-4">
+                <h4 class="font-medium mb-2">Proveedor de IA</h4>
+                <div id="providers-container" class="flex flex-col space-y-2">
+                    <!-- Los proveedores se cargarán dinámicamente aquí -->
+                    <div class="flex items-center">
+                        <div class="animate-pulse bg-gray-200 h-5 w-full rounded"></div>
+                    </div>
+                </div>
             </div>
             
             <div class="mb-4">
@@ -58,7 +72,7 @@ function createConfigMenu() {
                 </div>
                 
                 <!-- Top K -->
-                <div>
+                <div id="top_k_container">
                     <div class="flex justify-between">
                         <label for="top_k" class="block text-sm font-medium">Top K: </label>
                         <span id="top_k-value" class="text-sm font-mono">40</span>
@@ -87,14 +101,22 @@ function createConfigMenu() {
                            class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
                 </div>
                 
-                <!-- Num Thread -->
-                <div>
+                <!-- Num Thread - solo para Ollama -->
+                <div id="num_thread_container">
                     <div class="flex justify-between">
                         <label for="num_thread" class="block text-sm font-medium">Hilos CPU: </label>
                         <span id="num_thread-value" class="text-sm font-mono">4</span>
                     </div>
                     <input type="range" id="num_thread" min="1" max="8" step="1" value="4" 
                            class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                </div>
+                
+                <!-- Selector de modelo - se muestra según el proveedor -->
+                <div id="model_selector_container" class="hidden">
+                    <label for="model_selector" class="block text-sm font-medium mb-1">Modelo: </label>
+                    <select id="model_selector" class="w-full p-2 border rounded text-sm">
+                        <!-- Las opciones se cargarán dinámicamente según el proveedor -->
+                    </select>
                 </div>
             </div>
             
@@ -161,7 +183,18 @@ function setupConfigEvents() {
 
 // Variables globales para la configuración
 let currentConfigType = 'sql';
+let currentProvider = 'ollama';
 let config = {
+    ai_provider: 'ollama',
+    ollama: {
+        model: 'mistral'
+    },
+    claude: {
+        model: 'claude-3-opus-20240229'
+    },
+    openai: {
+        model: 'gpt-4o'
+    },
     sql: {
         temperature: 0.2,
         top_k: 40,
@@ -178,6 +211,66 @@ let config = {
     }
 };
 
+// Modelos disponibles para cada proveedor
+const providerModels = {
+    ollama: [
+        { value: 'mistral', label: 'Mistral' },
+        { value: 'llama2', label: 'Llama 2' },
+        { value: 'llama3', label: 'Llama 3' }
+    ],
+    claude: [
+        { value: 'claude-2.1', label: 'Claude 2.1' },
+        { value: 'claude-2.0', label: 'Claude 2.0' },
+        { value: 'claude-instant-1.2', label: 'Claude Instant 1.2' }
+    ],
+    openai: [
+        { value: 'gpt-4o', label: 'GPT-4o' },
+        { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
+        { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' }
+    ]
+};
+
+// Cargar los proveedores disponibles desde el servidor
+async function loadAvailableProviders() {
+    try {
+        const response = await fetch('/api/providers');
+        const data = await response.json();
+        
+        // Actualizar el contenedor de proveedores
+        const container = document.getElementById('providers-container');
+        container.innerHTML = '';
+        
+        // Configurar el proveedor activo
+        currentProvider = data.active;
+        
+        // Crear botones de radio para cada proveedor
+        for (const [key, provider] of Object.entries(data.providers)) {
+            // Solo mostrar proveedores disponibles
+            if (provider.available) {
+                const radio = document.createElement('div');
+                radio.className = 'flex items-center space-x-2 p-1';
+                radio.innerHTML = `
+                    <input type="radio" id="provider-${key}" name="provider" value="${key}" 
+                           class="form-radio h-4 w-4 text-blue-600" ${key === currentProvider ? 'checked' : ''}>
+                    <label for="provider-${key}" class="text-sm">${provider.name}</label>
+                `;
+                container.appendChild(radio);
+                
+                // Añadir evento de cambio
+                radio.querySelector('input').addEventListener('change', function() {
+                    setProvider(key);
+                });
+            }
+        }
+        
+        // Actualizar la interfaz según el proveedor seleccionado
+        updateProviderSpecificUI(currentProvider);
+        
+    } catch (error) {
+        console.error('Error al cargar proveedores:', error);
+    }
+}
+
 // Cargar configuración desde localStorage o servidor
 function loadConfig() {
     // Intentar cargar desde localStorage
@@ -186,6 +279,7 @@ function loadConfig() {
         try {
             config = JSON.parse(savedConfig);
             console.log('Configuración cargada desde localStorage:', config);
+            currentProvider = config.ai_provider || 'ollama';
         } catch (e) {
             console.error('Error al cargar configuración:', e);
         }
@@ -195,8 +289,10 @@ function loadConfig() {
             .then(response => response.json())
             .then(data => {
                 config = data;
+                currentProvider = config.ai_provider || 'ollama';
                 console.log('Configuración cargada desde el servidor:', config);
                 updateUIFromConfig();
+                updateProviderSpecificUI(currentProvider);
             })
             .catch(error => {
                 console.error('Error al cargar configuración desde el servidor:', error);
@@ -231,12 +327,64 @@ function updateUIFromConfig() {
     
     // Actualizar el indicador de tipo
     document.getElementById('config-type-indicator').textContent = currentConfigType.toUpperCase();
+    
+    // Actualizar el selector de modelo si es necesario
+    updateModelSelector();
+}
+
+// Actualizar controles específicos según el proveedor
+function updateProviderSpecificUI(providerName) {
+    // Mostrar/ocultar controles específicos de Ollama
+    const isOllama = providerName === 'ollama';
+    document.getElementById('top_k_container').style.display = isOllama ? 'block' : 'none';
+    document.getElementById('num_thread_container').style.display = isOllama ? 'block' : 'none';
+    
+    // Mostrar/ocultar selector de modelo
+    const modelContainer = document.getElementById('model_selector_container');
+    modelContainer.classList.toggle('hidden', false); // Siempre mostrar el selector de modelo
+    
+    // Actualizar las opciones del selector de modelo
+    updateModelSelector();
+}
+
+// Actualizar el selector de modelo según el proveedor actual
+function updateModelSelector() {
+    const modelSelector = document.getElementById('model_selector');
+    modelSelector.innerHTML = '';
+    
+    // Obtener los modelos disponibles para el proveedor actual
+    const models = providerModels[currentProvider] || [];
+    
+    // Obtener el modelo actual seleccionado en la configuración
+    const currentModel = config[currentProvider]?.model || models[0]?.value;
+    
+    // Añadir opciones al selector
+    models.forEach(model => {
+        const option = document.createElement('option');
+        option.value = model.value;
+        option.textContent = model.label;
+        option.selected = model.value === currentModel;
+        modelSelector.appendChild(option);
+    });
+    
+    // Añadir evento de cambio
+    modelSelector.addEventListener('change', function() {
+        config[currentProvider] = config[currentProvider] || {};
+        config[currentProvider].model = this.value;
+    });
 }
 
 // Cambiar el tipo de configuración (SQL o Chat)
 function setConfigType(type) {
     currentConfigType = type;
     updateUIFromConfig();
+}
+
+// Cambiar el proveedor de IA
+function setProvider(providerName) {
+    currentProvider = providerName;
+    config.ai_provider = providerName;
+    updateProviderSpecificUI(providerName);
 }
 
 // Restablecer a la configuración por defecto
@@ -246,8 +394,10 @@ function resetConfig() {
         .then(response => response.json())
         .then(data => {
             config = data;
+            currentProvider = config.ai_provider || 'ollama';
             localStorage.removeItem('nl2sql_config');
             updateUIFromConfig();
+            updateProviderSpecificUI(currentProvider);
             alert('Configuración restablecida a valores predeterminados');
         })
         .catch(error => {
@@ -260,12 +410,22 @@ function resetConfig() {
 function saveConfig() {
     // Obtener los valores actuales de todos los controles
     const currentConfig = {};
-    ['temperature', 'top_k', 'top_p', 'num_predict', 'num_thread'].forEach(key => {
+    ['temperature', 'top_p', 'num_predict'].forEach(key => {
         const input = document.getElementById(key);
         if (input) {
             currentConfig[key] = parseFloat(input.value);
         }
     });
+    
+    // Añadir parámetros específicos de Ollama si es el proveedor actual
+    if (currentProvider === 'ollama') {
+        ['top_k', 'num_thread'].forEach(key => {
+            const input = document.getElementById(key);
+            if (input) {
+                currentConfig[key] = parseInt(input.value);
+            }
+        });
+    }
     
     // Actualizar el objeto de configuración
     config[currentConfigType] = currentConfig;
@@ -298,10 +458,19 @@ function getCurrentConfig() {
     const isChat = window.location.href.includes('consultas_chat');
     const configType = isChat ? 'chat' : 'sql';
     
-    return {
+    // Crear configuración con los parámetros comunes
+    const currentConfig = {
         ...config[configType],
-        configType
+        configType,
+        provider: currentProvider
     };
+    
+    // Añadir configuración específica del proveedor
+    if (config[currentProvider]) {
+        currentConfig.model = config[currentProvider].model;
+    }
+    
+    return currentConfig;
 }
 
 // Exponer función para obtener configuración

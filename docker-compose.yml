@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   db:
     image: mariadb:latest
@@ -71,12 +69,23 @@ services:
       - db
       - ollama
     environment:
+      # Database configuration
       - DB_USER=root
       - DB_PASSWORD=120586
       - DB_HOST=db
       - DB_PORT=3306
       - DB_NAME=midb
+      
+      # Ollama configuration
       - OLLAMA_HOST=http://ollama:11434
+      
+      # AI Provider configuration
+      - DEFAULT_AI_PROVIDER=ollama
+      
+      # Cloud API Keys - Uncomment and fill to use Claude or OpenAI
+      # - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      # - OPENAI_API_KEY=${OPENAI_API_KEY}
+      
     volumes:
       - ./app:/app
     networks:

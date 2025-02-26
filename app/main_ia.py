@@ -4,12 +4,11 @@ from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from database_ia import SessionLocalIA
-from sql_generator import generar_sql_desde_texto
-from chat_generator import generar_respuesta_chat_con_cache
 from pydantic import BaseModel
-import ollama
 from config_handler import config_handler
+from ai_providers.base_provider import AIProvider
 import json
+import os
 
 app = FastAPI(title="API SQL IA")
 
@@ -36,10 +35,35 @@ def get_db():
 class Pregunta(BaseModel):
     pregunta: str
     config: dict = {}
+    provider: str = None  # Opcional: permite al usuario elegir el proveedor
 
 class Configuracion(BaseModel):
-    sql: dict
-    chat: dict
+    ai_provider: str = None
+    sql: dict = {}
+    chat: dict = {}
+    ollama: dict = {}
+    claude: dict = {}
+    openai: dict = {}
+
+def get_ai_provider(provider_name=None):
+    """
+    Obtiene el proveedor de IA adecuado basado en la configuración o la solicitud.
+    
+    Args:
+        provider_name: Nombre opcional del proveedor a usar
+        
+    Returns:
+        Una instancia del proveedor de IA
+    """
+    if provider_name is None:
+        provider_name = config_handler.get_active_provider()
+    
+    try:
+        return AIProvider.get_provider(provider_name)
+    except ValueError as e:
+        print(f"Error al obtener proveedor {provider_name}: {str(e)}")
+        # Fallback al proveedor por defecto
+        return AIProvider.get_provider("ollama")
 
 @app.post("/consulta_ia/")
 async def consulta_ia(pregunta: Pregunta, db: Session = Depends(get_db)):
@@ -49,9 +73,13 @@ async def consulta_ia(pregunta: Pregunta, db: Session = Depends(get_db)):
     # Extraer la pregunta y la configuración del cuerpo de la solicitud
     pregunta_texto = pregunta.pregunta
     config_params = pregunta.config
+    provider_name = pregunta.provider or config_handler.get_active_provider()
     
-    # Usar la configuración proporcionada o la predeterminada
-    respuesta_sql = generar_sql_desde_texto(pregunta_texto, config_params)
+    # Obtener el proveedor de IA adecuado
+    provider = get_ai_provider(provider_name)
+    
+    # Obtener la consulta SQL usando el proveedor
+    respuesta_sql = await provider.generate_sql(pregunta_texto, config_params)
 
     if "error" in respuesta_sql:
         return respuesta_sql  # Devuelve error si la consulta no es segura
@@ -68,7 +96,8 @@ async def consulta_ia(pregunta: Pregunta, db: Session = Depends(get_db)):
         rows = [dict(zip(columns, row)) for row in result.fetchall()]
         return {
             "sql": consulta_sql,
-            "resultado": rows
+            "resultado": rows,
+            "provider": provider_name
         }
     except Exception as e:
         return {"error": f"Error en la consulta: {str(e)}"}
@@ -76,13 +105,23 @@ async def consulta_ia(pregunta: Pregunta, db: Session = Depends(get_db)):
 @app.post("/consulta_chat/")
 async def consulta_chat(pregunta: Pregunta):
     """
-    Recibe una pregunta en lenguaje natural y devuelve la respuesta de Mistral.
+    Recibe una pregunta en lenguaje natural y devuelve la respuesta del modelo.
     """
     # Extraer la pregunta y la configuración del cuerpo de la solicitud
     pregunta_texto = pregunta.pregunta
     config_params = pregunta.config
+    provider_name = pregunta.provider or config_handler.get_active_provider()
     
-    return generar_respuesta_chat_con_cache(pregunta_texto, config_params)
+    # Obtener el proveedor de IA adecuado
+    provider = get_ai_provider(provider_name)
+    
+    # Generar respuesta de chat
+    respuesta = await provider.generate_chat_response(pregunta_texto, config_params)
+    
+    # Añadir información del proveedor a la respuesta
+    respuesta["provider"] = provider_name
+    
+    return respuesta
 
 @app.post("/consulta_chat_stream/")
 async def consulta_chat_stream(pregunta: Pregunta):
@@ -92,38 +131,16 @@ async def consulta_chat_stream(pregunta: Pregunta):
     # Extraer la pregunta y la configuración del cuerpo de la solicitud
     pregunta_texto = pregunta.pregunta
     config_params = pregunta.config
+    provider_name = pregunta.provider or config_handler.get_active_provider()
     
-    # Obtener parámetros de configuración
-    params = config_handler.get_chat_params()
-    # Actualizar con los parámetros personalizados
-    if config_params:
-        params.update(config_params)
+    # Obtener el proveedor de IA adecuado
+    provider = get_ai_provider(provider_name)
     
-    async def generate():
-        try:
-            stream = ollama.chat(
-                model="mistral",
-                messages=[{"role": "user", "content": pregunta_texto}],
-                stream=True,
-                options={
-                    "temperature": params.get('temperature', 0.7),
-                    "top_k": params.get('top_k', 40),
-                    "top_p": params.get('top_p', 0.9),
-                    "num_predict": params.get('num_predict', 100),
-                    "num_thread": params.get('num_thread', 4)
-                }
-            )
-            
-            for chunk in stream:
-                if 'message' in chunk and 'content' in chunk['message']:
-                    yield chunk['message']['content']
-                    
-        except Exception as e:
-            yield f"Error: {str(e)}"
-    
-    return StreamingResponse(generate(), media_type="text/plain")
+    # Generar respuesta en streaming
+    return StreamingResponse(provider.generate_stream_response(pregunta_texto, config_params), 
+                             media_type="text/plain")
 
-# Nuevas rutas para manejar la configuración
+# Rutas para manejar la configuración
 @app.get("/api/config")
 def get_config():
     """Devuelve la configuración actual."""
@@ -139,5 +156,27 @@ def get_default_config():
 @app.post("/api/config")
 def update_config(config: Configuracion):
     """Actualiza la configuración."""
-    config_handler.update_config(config.dict())
+    config_handler.update_config(config.dict(exclude_unset=True))
+    config_handler.save_config()
     return JSONResponse({"status": "success", "message": "Configuración actualizada"})
+
+@app.get("/api/providers")
+def get_available_providers():
+    """Devuelve los proveedores disponibles y sus estados."""
+    providers = {
+        "ollama": {"available": True, "name": "Ollama (Mistral)"},
+        "claude": {"available": bool(os.getenv("ANTHROPIC_API_KEY")), "name": "Claude (Anthropic)"},
+        "openai": {"available": bool(os.getenv("OPENAI_API_KEY")), "name": "GPT (OpenAI)"}
+    }
+    
+    # Añadir el proveedor activo
+    active_provider = config_handler.get_active_provider()
+    return JSONResponse({
+        "providers": providers, 
+        "active": active_provider
+    })
+
+# Punto de entrada
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
