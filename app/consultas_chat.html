@@ -11,6 +11,31 @@
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&family=Open+Sans&family=Montserrat&family=Lato&family=Source+Code+Pro&display=swap" rel="stylesheet">
     <style>
+        body, html {
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+        }
+        
+        #tablero {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            min-width: 100vw;
+            min-height: 100vh;
+            overflow: auto;
+        }
+        
+        #tablero-content {
+            position: relative;
+            min-width: 100%;
+            min-height: 100%;
+            width: 3000px;  /* Área expandible */
+            height: 3000px; /* Área expandible */
+        }
+        
         .nota {
             cursor: move;
             position: absolute;
@@ -21,13 +46,50 @@
             touch-action: none; /* Importante para dispositivos táctiles */
             user-select: none;
         }
+        
         .nota-header {
             cursor: move;
         }
+        
         .nota-content {
             max-height: 150px;
             overflow-y: auto;
         }
+        
+        .entry-panel {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            max-width: 600px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            z-index: 50;
+            display: flex;
+            padding: 10px;
+            opacity: 0.9;
+        }
+        
+        .entry-panel:hover {
+            opacity: 1;
+        }
+        
+        .header-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 40;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
         .font-roboto { font-family: 'Roboto', sans-serif; }
         .font-opensans { font-family: 'Open Sans', sans-serif; }
         .font-montserrat { font-family: 'Montserrat', sans-serif; }
@@ -81,49 +143,34 @@
         }
     </style>
 </head>
-<body class="bg-gray-100 p-6 min-h-screen">
-    <div class="max-w-6xl mx-auto">
-        <div class="flex justify-between items-center mb-6">
-            <h1 class="text-3xl font-bold text-gray-800">Consultas Chat con IA</h1>
-            <a href="/" class="text-blue-500 hover:text-blue-700">Volver a NL2SQL</a>
-        </div>
-        
-        <!-- Contenedor de notas -->
-        <div id="tablero" class="relative bg-white rounded-lg shadow-md p-6 min-h-[600px] border-2 border-gray-200">
-            <button 
-                id="botonNuevaConsulta"
-                class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition fixed bottom-4 right-4 shadow-lg"
-            >
-                Nueva Consulta
-            </button>
+<body class="bg-gray-100">
+    <!-- Barra de navegación superior -->
+    <div class="header-bar">
+        <h1 class="text-xl font-bold text-gray-800">Consultas Chat con IA</h1>
+        <a href="/" class="text-blue-500 hover:text-blue-700">Volver a NL2SQL</a>
+    </div>
+    
+    <!-- Tablero expandible con scroll -->
+    <div id="tablero" class="bg-white">
+        <div id="tablero-content">
+            <!-- Las notas se añadirán aquí dinámicamente -->
         </div>
     </div>
-
-    <!-- Ventana modal para nueva consulta -->
-    <div id="modalConsulta" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-        <div class="bg-white rounded-lg p-6 max-w-md w-full">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-semibold">Nueva Consulta</h3>
-                <button id="cerrarModal" class="text-gray-500 hover:text-gray-700">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
-            </div>
-            <textarea 
-                id="textareaConsulta"
-                class="w-full p-4 border rounded-lg mb-4 h-32"
-                placeholder="Escribe tu pregunta aquí..."
-            ></textarea>
-            <div class="flex justify-end">
-                <button 
-                    id="botonEnviar"
-                    class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition"
-                >
-                    Enviar
-                </button>
-            </div>
-        </div>
+    
+    <!-- Panel de entrada persistente -->
+    <div class="entry-panel">
+        <textarea 
+            id="textareaConsulta"
+            class="w-full p-2 border rounded-lg mr-2"
+            placeholder="Escribe tu pregunta aquí..."
+            rows="1"
+        ></textarea>
+        <button 
+            id="botonEnviar"
+            class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition whitespace-nowrap"
+        >
+            Enviar
+        </button>
     </div>
     
     <!-- Panel de personalización de notas -->
@@ -167,8 +214,8 @@
 
     <script>
         // Variables para posicionar notas nuevas y llevar el z-index máximo
-        let posX = 20;
-        let posY = 20;
+        let posX = 100;
+        let posY = 100;
         let maxZIndex = 10;
         let currentNote = null;
         
@@ -176,12 +223,6 @@
         function setupDraggable() {
             interact('.nota').draggable({
                 inertia: true,
-                modifiers: [
-                    interact.modifiers.restrictRect({
-                        restriction: 'parent',
-                        endOnly: true
-                    })
-                ],
                 autoScroll: true,
                 listeners: {
                     start: function(event) {
@@ -190,6 +231,7 @@
                         bringToFront(target);
                     },
                     move: dragMoveListener,
+                    end: checkTableroSize
                 }
             });
         }
@@ -207,6 +249,55 @@
             // Almacenar posición como atributos
             target.setAttribute('data-x', x);
             target.setAttribute('data-y', y);
+            
+            // Auto-scroll si se acerca a los bordes
+            const tablero = document.getElementById('tablero');
+            const rect = target.getBoundingClientRect();
+            
+            if (rect.right > tablero.clientWidth - 50) {
+                tablero.scrollLeft += 10;
+            } else if (rect.left < 50) {
+                tablero.scrollLeft -= 10;
+            }
+            
+            if (rect.bottom > tablero.clientHeight - 50) {
+                tablero.scrollTop += 10;
+            } else if (rect.top < 50) {
+                tablero.scrollTop -= 10;
+            }
+        }
+        
+        // Función para comprobar y ajustar el tamaño del tablero si es necesario
+        function checkTableroSize() {
+            const tableroContent = document.getElementById('tablero-content');
+            const notas = document.querySelectorAll('.nota');
+            let maxRight = 0;
+            let maxBottom = 0;
+            
+            notas.forEach(nota => {
+                const rect = nota.getBoundingClientRect();
+                const x = (parseFloat(nota.getAttribute('data-x')) || 0);
+                const y = (parseFloat(nota.getAttribute('data-y')) || 0);
+                
+                const rightEdge = x + rect.width;
+                const bottomEdge = y + rect.height;
+                
+                maxRight = Math.max(maxRight, rightEdge);
+                maxBottom = Math.max(maxBottom, bottomEdge);
+            });
+            
+            // Añadir margen extra
+            maxRight += 500;
+            maxBottom += 500;
+            
+            // Ajustar el tamaño del tablero si es necesario
+            if (maxRight > tableroContent.offsetWidth) {
+                tableroContent.style.width = maxRight + 'px';
+            }
+            
+            if (maxBottom > tableroContent.offsetHeight) {
+                tableroContent.style.height = maxBottom + 'px';
+            }
         }
         
         // Función para traer una nota al frente
@@ -264,9 +355,20 @@
             header.classList.add(`bg-${color}-header`);
         }
         
+        // Permitir expandir el textarea automáticamente 
+        function autoExpandTextarea() {
+            const textarea = document.getElementById('textareaConsulta');
+            textarea.addEventListener('input', function() {
+                this.style.height = 'auto';
+                const newHeight = Math.min(this.scrollHeight, 150); // máximo 150px
+                this.style.height = newHeight + 'px';
+            });
+        }
+        
         // Inicializar al cargar la página
         document.addEventListener('DOMContentLoaded', function() {
             setupDraggable();
+            autoExpandTextarea();
             
             // Configurar selectores de fuente
             document.getElementById('fontSelector').addEventListener('change', function() {
@@ -295,16 +397,6 @@
                 // Añadir nueva clase de tamaño
                 content.classList.add(this.value);
             });
-        });
-
-        // Manejar apertura/cierre de modal
-        document.getElementById('botonNuevaConsulta').addEventListener('click', function() {
-            document.getElementById('modalConsulta').classList.remove('hidden');
-            document.getElementById('textareaConsulta').focus();
-        });
-
-        document.getElementById('cerrarModal').addEventListener('click', function() {
-            document.getElementById('modalConsulta').classList.add('hidden');
         });
 
         // Permitir enviar con Enter
@@ -360,7 +452,7 @@
                     </div>
                 `;
                 
-                document.getElementById('tablero').appendChild(nota);
+                document.getElementById('tablero-content').appendChild(nota);
                 
                 // Configurar click para traer al frente
                 nota.addEventListener('mousedown', function() {
@@ -381,8 +473,8 @@
                 posX += 30;
                 posY += 30;
                 if (posX > 300) {
-                    posX = 20;
-                    posY = 20;
+                    posX = 100;
+                    posY = 100;
                 }
                 
                 // Incrementar el z-index máximo
@@ -390,6 +482,9 @@
                 
                 // Hacer la nota arrastrable
                 setupDraggable();
+                
+                // Verificar el tamaño del tablero
+                checkTableroSize();
                 
                 // Iniciar streaming
                 const response = await fetch('/consulta_chat_stream/', {
@@ -420,7 +515,7 @@
                 }
                 
                 document.getElementById('textareaConsulta').value = '';
-                document.getElementById('modalConsulta').classList.add('hidden');
+                document.getElementById('textareaConsulta').style.height = 'auto';
                 
             } catch (error) {
                 alert('Error de conexión: ' + error.message);
